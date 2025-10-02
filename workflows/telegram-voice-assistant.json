@@ -1,0 +1,610 @@
+{
+  "name": "Telegram Voice Assistant with Whisper & Gemini",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ]
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "telegram-voice-webhook",
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram_bot_credential",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.message.voice }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "check-voice-message",
+      "name": "Check Voice Message",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "fileId": "={{ $json.message.voice.file_id }}"
+      },
+      "id": "get-file-info",
+      "name": "Get File Info",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        680,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/file/bot{{ $env.TELEGRAM_BOT_TOKEN }}/{{ $json.file_path }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "download-voice-file",
+      "name": "Download Voice File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://whisper:9000/asr?task=transcribe&language=auto&output=json",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "audio_file",
+              "value": "={{ $binary.data }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "whisper-transcribe",
+      "name": "Whisper Transcribe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract transcribed text from Whisper response\nconst whisperResponse = $input.first().json;\nconst transcribedText = whisperResponse.text || '';\nconst chatId = $('Telegram Trigger').first().json.message.chat.id;\nconst userName = $('Telegram Trigger').first().json.message.from.first_name || 'User';\n\nreturn {\n  transcribedText: transcribedText.trim(),\n  chatId: chatId,\n  userName: userName,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "extract-text",
+      "name": "Extract Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.transcribedText.toLowerCase() }}",
+              "operation": "contains",
+              "value2": "email"
+            }
+          ]
+        }
+      },
+      "id": "check-intent-email",
+      "name": "Check Intent: Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.transcribedText.toLowerCase() }}",
+              "operation": "contains",
+              "value2": "calendar"
+            }
+          ]
+        }
+      },
+      "id": "check-intent-calendar",
+      "name": "Check Intent: Calendar",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"You are a helpful voice assistant. The user said: '{{ $json.transcribedText }}'. Analyze this request and provide a helpful response. If it's about sending an email, extract: recipient email, subject, and message body. If it's about calendar, extract: event title, date, time, and duration. Otherwise, provide a conversational response.\"\n    }]\n  }]\n}",
+        "options": {}
+      },
+      "id": "gemini-analyze",
+      "name": "Gemini Analyze",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1780,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Gemini response and extract structured data\nconst geminiResponse = $input.first().json;\nconst responseText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not process your request.';\n\nconst transcribedText = $('Extract Text').first().json.transcribedText.toLowerCase();\n\n// Initialize result object\nconst result = {\n  responseText: responseText,\n  intent: 'general',\n  extractedData: {}\n};\n\n// Detect intent\nif (transcribedText.includes('email') || transcribedText.includes('send') || transcribedText.includes('письмо')) {\n  result.intent = 'email';\n  \n  // Try to extract email components using regex\n  const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\\.[a-zA-Z0-9_-]+)/gi;\n  const emails = transcribedText.match(emailRegex);\n  \n  result.extractedData = {\n    recipient: emails?.[0] || '',\n    subject: 'Voice Message Request',\n    body: responseText\n  };\n} else if (transcribedText.includes('calendar') || transcribedText.includes('event') || transcribedText.includes('meeting') || transcribedText.includes('календарь')) {\n  result.intent = 'calendar';\n  \n  // Extract date/time patterns\n  const today = new Date();\n  result.extractedData = {\n    title: transcribedText.substring(0, 100),\n    startDate: today.toISOString(),\n    endDate: new Date(today.getTime() + 3600000).toISOString(), // +1 hour\n    description: responseText\n  };\n}\n\nreturn result;"
+      },
+      "id": "parse-gemini-response",
+      "name": "Parse Gemini Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.intent }}",
+              "value2": "email"
+            }
+          ]
+        }
+      },
+      "id": "route-by-intent",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        2220,
+        500
+      ],
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.intent }}",
+                    "value2": "email"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "email"
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.intent }}",
+                    "value2": "calendar"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "calendar"
+            }
+          ]
+        },
+        "fallbackOutput": "extra"
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Extract Text').first().json.chatId }}",
+        "text": "=📧 Email Intent Detected!\n\nRecipient: {{ $json.extractedData.recipient || 'Not specified' }}\nSubject: {{ $json.extractedData.subject }}\n\nWould you like me to send this email? Reply with 'yes' to confirm.",
+        "additionalFields": {}
+      },
+      "id": "send-email-confirmation",
+      "name": "Send Email Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        2440,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "email": "={{ $json.extractedData.recipient }}",
+        "subject": "={{ $json.extractedData.subject }}",
+        "message": "={{ $json.extractedData.body }}",
+        "options": {}
+      },
+      "id": "send-gmail",
+      "name": "Send Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        300
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "calendarId": "primary",
+        "start": "={{ $json.extractedData.startDate }}",
+        "end": "={{ $json.extractedData.endDate }}",
+        "summary": "={{ $json.extractedData.title }}",
+        "description": "={{ $json.extractedData.description }}",
+        "options": {}
+      },
+      "id": "create-calendar-event",
+      "name": "Create Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [
+        2440,
+        500
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "3",
+          "name": "Google Calendar OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Extract Text').first().json.chatId }}",
+        "text": "=📅 Calendar Event Created!\n\nTitle: {{ $json.summary }}\nStart: {{ $json.start.dateTime }}\n\nCheck your Google Calendar!",
+        "additionalFields": {}
+      },
+      "id": "send-calendar-confirmation",
+      "name": "Send Calendar Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        2660,
+        500
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Extract Text').first().json.chatId }}",
+        "text": "={{ $json.responseText }}",
+        "additionalFields": {}
+      },
+      "id": "send-general-response",
+      "name": "Send General Response",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        2440,
+        700
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "Please send a voice message to use this assistant.",
+        "additionalFields": {}
+      },
+      "id": "send-error-not-voice",
+      "name": "Send Error: Not Voice",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        680,
+        400
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "docker-compose start whisper",
+        "cwd": "/data"
+      },
+      "id": "start-whisper-container",
+      "name": "Start Whisper Container",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        900,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "command": "docker-compose stop whisper",
+        "cwd": "/data"
+      },
+      "id": "stop-whisper-container",
+      "name": "Stop Whisper Container",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2440,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Voice Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Voice Message": {
+      "main": [
+        [
+          {
+            "node": "Get File Info",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Start Whisper Container",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error: Not Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get File Info": {
+      "main": [
+        [
+          {
+            "node": "Download Voice File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Voice File": {
+      "main": [
+        [
+          {
+            "node": "Whisper Transcribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Whisper Transcribe": {
+      "main": [
+        [
+          {
+            "node": "Extract Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Text": {
+      "main": [
+        [
+          {
+            "node": "Gemini Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Analyze": {
+      "main": [
+        [
+          {
+            "node": "Parse Gemini Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gemini Response": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Send Email Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send General Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        [
+          {
+            "node": "Send Calendar Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Calendar Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Stop Whisper Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Gmail": {
+      "main": [
+        [
+          {
+            "node": "Stop Whisper Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send General Response": {
+      "main": [
+        [
+          {
+            "node": "Stop Whisper Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-10-03T01:19:14.000Z",
+  "versionId": "1"
+}
