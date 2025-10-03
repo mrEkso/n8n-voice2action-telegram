@@ -47,8 +47,8 @@ brew install git ffmpeg node
 ### 2. Clone and Setup
 
 ```bash
-git clone https://github.com/yourusername/n8n-voice2action-telegram.git
-cd n8n-voice2action-telegram
+git clone https://github.com/yourusername/voice2action-telegram.git
+cd voice2action-telegram
 
 # Install Node.js dependencies
 npm install
@@ -147,7 +147,6 @@ That's it! Send a voice message to your Telegram bot.
 
 1. In the same project enable **Google Calendar API**
 2. Use the same OAuth credentials
-3. Configure Google Calendar credentials in n8n
 
 ### Gemini API
 
@@ -232,12 +231,6 @@ tail -n 100 logs/assistant.log
 
 ## 📊 Resource Monitoring
 
-### Check Memory and CPU Usage
-
-```bash
-docker stats
-```
-
 ### Whisper Optimization
 
 You can change Whisper model in `.env`:
@@ -284,35 +277,9 @@ WHISPER_MODEL=small
 ## 🔒 Security
 
 - **Don't commit `.env` file** to git (already in .gitignore)
-- **Use strong passwords** for n8n
 - **Restrict access** to bot via Chat ID
-- **Regularly update** Docker images
-- **Use HTTPS** for production (via nginx + Let's Encrypt)
 
 ## 🐛 Troubleshooting
-
-### Whisper Won't Start
-
-```bash
-# Check logs
-docker logs whisper-asr
-
-# Recreate container
-docker-compose up -d --force-recreate whisper
-```
-
-### n8n Not Accessible
-
-```bash
-# Check status
-docker-compose ps
-
-# Check logs
-docker logs n8n
-
-# Restart
-docker-compose restart n8n
-```
 
 ### API Errors
 
@@ -325,13 +292,10 @@ docker-compose restart n8n
 ```bash
 # Use smaller Whisper model
 WHISPER_MODEL=tiny
-
-# Limit memory for containers in docker-compose.yml
-```
+```   
 
 ## 📚 External Resources
 
-- [n8n Documentation](https://docs.n8n.io/)
 - [Whisper GitHub](https://github.com/openai/whisper)
 - [Gemini API Docs](https://ai.google.dev/docs)
 - [Telegram Bot API](https://core.telegram.org/bots/api)
