@@ -1,88 +1,123 @@
-# 🎙️ n8n Voice2Action Telegram Assistant
+# 🎙️ Telegram Voice2Action Assistant
 
-A fully-featured voice assistant for Telegram with speech recognition (Whisper), AI analysis (Gemini), email sending (Gmail), and calendar management (Google Calendar). All services run locally on your laptop with minimal resource usage.
+Smart voice assistant for Telegram using **Node.js + Whisper + Gemini AI**. Minimal resource usage, modular architecture, no Docker containers required.
 
 ## 🌟 Features
 
-- **🎤 Voice Recognition**: Whisper ASR for accurate voice message transcription
+- **🎤 Speech Recognition**: Whisper (Transformers.js) or direct audio upload to Gemini
 - **🤖 AI Analysis**: Google Gemini for intent understanding and response generation
-- **📧 Email Integration**: Automatic email sending via Gmail
+- **📧 Email Integration**: Automatic email sending via Gmail API
 - **📅 Calendar**: Create Google Calendar events by voice
-- **⚡ Resource Optimization**: Whisper starts only when needed and stops automatically
-- **🐳 Docker**: All services in containers for easy deployment
-- **🔒 Self-hosted**: Full control over your data, everything runs locally
+- **✅ Confirmations**: Interactive buttons for action confirmation
+- **⚡ Minimal Resources**: Runs directly on your system, no Docker overhead
+- **🚀 Fast**: Lazy service loading, request queue management
+- **🔒 Privacy**: Full control over your data, everything runs locally
+- **🏗️ Modular Architecture**: Clean code structure, easily extensible
 
 ## 📋 Requirements
 
-- **OS**: Linux (Ubuntu 22.04+) or WSL2 on Windows
-- **RAM**: Minimum 4GB (8GB recommended)
+- **OS**: Linux (Ubuntu 22.04+), macOS, or **Windows 10/11**
+- **RAM**: Minimum 2GB (4GB recommended)
 - **CPU**: 2+ cores
-- **Disk**: 5GB free space
-- **Docker**: version 20.10+
-- **Docker Compose**: version 2.0+
+- **Disk**: 2GB free space
+- **Node.js**: version 18.0.0+
+- **FFmpeg**: for audio conversion (optional)
+
+> **🪟 Windows Users**: See [WINDOWS-INSTALL.md](WINDOWS-INSTALL.md) for detailed setup guide
 
 ## 🚀 Quick Start
 
-> **💡 Tip**: For the fastest start, see [QUICK-START.md](QUICK-START.md)
-### 1. Clone Repository
+### 1. Install Dependencies
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install -y build-essential git ffmpeg nodejs npm
+```
+
+**macOS:**
+```bash
+brew install git ffmpeg node
+```
+
+**Windows:**
+```powershell
+# Install Node.js from https://nodejs.org/
+# FFmpeg is optional for this project
+```
+
+### 2. Clone and Setup
 
 ```bash
 git clone https://github.com/yourusername/n8n-voice2action-telegram.git
 cd n8n-voice2action-telegram
+
+# Install Node.js dependencies
+npm install
 ```
 
-### 2. Environment Setup
+### 3. Configure Environment
+
+Create `.env` file in the project root:
 
 ```bash
-# Copy configuration template
 cp .env.example .env
+```
 
-# Edit .env and add API keys
-nano .env
+Edit `.env` and add your API keys:
+
+```env
+# Telegram Bot
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_ALLOWED_USERS=123456789,987654321
+
+# Google Gemini AI
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-1.5-flash
+
+# Google OAuth (for Gmail & Calendar)
+GOOGLE_CLIENT_ID=your_client_id_here
+GOOGLE_CLIENT_SECRET=your_client_secret_here
+
+# Audio Processing
+AUDIO_PROCESSING_METHOD=gemini  # or 'whisper'
+
+# Whisper Settings (if using whisper method)
+WHISPER_MODEL=tiny
+WHISPER_LANGUAGE=auto
+
+# User Settings
+USER_TIMEZONE=Europe/Berlin
 ```
 
 **Required API Keys:**
 
 - **Telegram Bot Token**: Get from [@BotFather](https://t.me/BotFather)
 - **Gemini API Key**: [Google AI Studio](https://makersuite.google.com/app/apikey)
-- **Google OAuth**: [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+- **Google OAuth** (for Gmail/Calendar): [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
 
-### 3. Automatic Installation
+### 4. Setup Google OAuth (Optional)
 
-```bash
-chmod +x scripts/install.sh
-./scripts/install.sh
-```
-
-The script will automatically:
-- Check and install Docker/Docker Compose
-- Create necessary directories
-- Pull Docker images
-- Start services
-- Set up convenient commands
-
-### 4. Activate Commands
+If you want to use Gmail and Calendar features:
 
 ```bash
-source ~/.bash_aliases
+# Run OAuth setup
+node scripts/setup-oauth.js
 ```
 
-### 5. Access n8n
+Follow the instructions to authorize the app.
 
-Open in browser: **http://localhost:5678**
+### 5. Start the Bot
 
-- **Login**: admin (or from .env)
-- **Password**: from .env file
+```bash
+# Production
+npm start
 
-### 6. Import Workflow
+# Development (with auto-reload)
+npm run dev
+```
 
-1. In n8n go to: **Workflows → Import from File**
-2. Select: `workflows/telegram-voice-assistant-v2.json`
-3. Configure credentials for:
-   - Telegram Bot API
-   - Gmail OAuth2
-   - Google Calendar OAuth2
-   - Gemini API (via HTTP Request with API key)
+That's it! Send a voice message to your Telegram bot.
 
 ## 📱 Telegram Bot Setup
 
@@ -91,14 +126,12 @@ Open in browser: **http://localhost:5678**
 1. Open [@BotFather](https://t.me/BotFather) in Telegram
 2. Send command: `/newbot`
 3. Follow instructions and get your token
-4. Add token to `.env` file
+4. Add token to `.env` file as `TELEGRAM_BOT_TOKEN`
 
-### Getting Chat ID
+### Restricting Access (Optional)
 
-1. Open [@userinfobot](https://t.me/userinfobot)
-2. Send any message
-3. Copy your Chat ID
-4. Add to `.env` (optional, for access restriction)
+1. Get your user ID from [@userinfobot](https://t.me/userinfobot)
+2. Add to `.env` as `TELEGRAM_ALLOWED_USERS=123456789`
 
 ## 🔑 Google APIs Setup
 
@@ -126,86 +159,78 @@ Open in browser: **http://localhost:5678**
 
 ## 🎯 Usage
 
-### Starting the Assistant
+### Starting the Bot
 
 ```bash
-voice-assistant-start
+npm start
+
+# Or for development with auto-reload:
+npm run dev
 ```
 
-### Sending Voice Messages
+### Bot Commands
 
-1. Open your bot in Telegram
-2. Record a voice message
-3. Send it to the bot
+- `/start` - Show welcome message
+- `/status` - Check system status and resource usage
+- `/help` - Get help and examples
 
-### Example Commands
+### Voice Commands Examples
 
-**📧 Sending Email:**
+**📧 Email:**
 ```
-"Send email to example@gmail.com with subject 'Meeting' and text 'Confirming attendance'"
-```
-
-**📅 Creating Event:**
-```
-"Create calendar event: team meeting tomorrow at 3 PM"
+"Send email to john@example.com with subject Meeting and text Confirming attendance"
 ```
 
-**💬 General Questions:**
+**📅 Calendar:**
+```
+"Create calendar event team meeting tomorrow at 3 PM"
+```
+
+**💬 General:**
 ```
 "What's the weather today?"
 "Tell me a joke"
-"Help me with Python code"
+"Explain quantum computing"
 ```
 
-## 🛠️ Service Management
+## 🛠️ Management
 
-### Main Commands
+### Running the Bot
 
 ```bash
-# Start all services
-voice-assistant-start
+# Start bot
+npm start
 
-# Stop all services
-voice-assistant-stop
+# Development mode (auto-reload)
+npm run dev
 
-# Restart
-voice-assistant-restart
+# Stop bot
+Ctrl+C
+```
 
+### Logs
+
+Logs are saved to `logs/assistant.log`
+
+```bash
 # View logs
-voice-assistant-logs
+tail -f logs/assistant.log
 
-# Service status
-docker-compose ps
+# View last 100 lines
+tail -n 100 logs/assistant.log
 ```
 
-### Whisper Management (on-demand)
+### Resource Optimization
 
-```bash
-# Start Whisper manually
-whisper-start
+**Whisper Model Selection** (in `.env`):
+- `tiny` - Fastest, ~75MB RAM, good for most cases
+- `base` - Better quality, ~150MB RAM
+- `small` - High quality, ~500MB RAM
 
-# Stop Whisper
-whisper-stop
-
-# Whisper status
-whisper-status
-
-# Whisper logs
-whisper-logs
-```
-
-### n8n Commands
-
-```bash
-# n8n logs only
-n8n-logs
-
-# Restart n8n
-n8n-restart
-
-# Stop n8n
-n8n-stop
-```
+**Memory Usage:**
+- Bot idle: ~50-100MB
+- Processing voice: +75-500MB (depending on model)
+- Total: ~150-600MB
 
 ## 📊 Resource Monitoring
 
@@ -238,9 +263,9 @@ WHISPER_MODEL=small
 └────────┬────────┘
          │ Voice Message
          ▼
-┌─────────────────┐
-│   n8n Workflow  │
-└────────┬────────┘
+┌─────────────────────┐
+│   node.js Workflow  │
+└────────┬────────────┘
          │
          ├─────────────────┐
          │                 │
