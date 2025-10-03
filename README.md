@@ -23,8 +23,6 @@ Smart voice assistant for Telegram using **Node.js + Whisper + Gemini AI**. Mini
 - **Node.js**: version 18.0.0+
 - **FFmpeg**: for audio conversion (optional)
 
-> **🪟 Windows Users**: See [WINDOWS-INSTALL.md](WINDOWS-INSTALL.md) for detailed setup guide
-
 ## 🚀 Quick Start
 
 ### 1. Install Dependencies
@@ -330,15 +328,6 @@ WHISPER_MODEL=tiny
 
 # Limit memory for containers in docker-compose.yml
 ```
-
-## 📚 Project Documentation
-
-- **[QUICK-START.md](QUICK-START.md)** - Quick start in 5 minutes
-- **[SETUP-GUIDE.md](SETUP-GUIDE.md)** - Detailed installation guide
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture
-- **[FAQ.md](FAQ.md)** - Frequently asked questions
-- **[PROJECT-STRUCTURE.md](PROJECT-STRUCTURE.md)** - Project structure
-- **[SUMMARY.md](SUMMARY.md)** - Project summary
 
 ## 📚 External Resources
 
